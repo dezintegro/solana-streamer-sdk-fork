@@ -30,6 +30,16 @@ pub const CONFIGS: &[GenericEventParseConfig] = &[
     GenericEventParseConfig {
         program_id: PUMPSWAP_PROGRAM_ID,
         protocol_type: ProtocolType::PumpSwap,
+        inner_instruction_discriminator: discriminators::BUY_EVENT,
+        instruction_discriminator: discriminators::BUY_EXACT_QUOTE_IN_IX,
+        event_type: EventType::PumpSwapBuy,
+        inner_instruction_parser: Some(parse_buy_inner_instruction),
+        instruction_parser: Some(parse_buy_exact_quote_in_instruction),
+        requires_inner_instruction: false,
+    },
+    GenericEventParseConfig {
+        program_id: PUMPSWAP_PROGRAM_ID,
+        protocol_type: ProtocolType::PumpSwap,
         inner_instruction_discriminator: discriminators::SELL_EVENT,
         instruction_discriminator: discriminators::SELL_IX,
         event_type: EventType::PumpSwapSell,
@@ -158,6 +168,41 @@ fn parse_buy_instruction(
         protocol_fee_recipient_token_account: accounts[10],
         base_token_program: accounts[11],
         quote_token_program: accounts[12],
+        coin_creator_vault_ata: accounts.get(17).copied().unwrap_or_default(),
+        coin_creator_vault_authority: accounts.get(18).copied().unwrap_or_default(),
+        ..Default::default()
+    }))
+}
+
+/// 解析buy_exact_quote_in指令事件
+fn parse_buy_exact_quote_in_instruction(
+    data: &[u8],
+    accounts: &[Pubkey],
+    metadata: EventMetadata,
+) -> Option<Box<dyn UnifiedEvent>> {
+    if data.len() < 16 || accounts.len() < 11 {
+        return None;
+    }
+
+    let spendable_quote_in = read_u64_le(data, 0)?;
+    let min_base_amount_out = read_u64_le(data, 8)?;
+
+    Some(Box::new(PumpSwapBuyEvent {
+        metadata,
+        base_amount_out: min_base_amount_out,
+        max_quote_amount_in: spendable_quote_in,
+        pool: accounts[0],
+        user: accounts[1],
+        base_mint: accounts[3],
+        quote_mint: accounts[4],
+        user_base_token_account: accounts[5],
+        user_quote_token_account: accounts[6],
+        pool_base_token_account: accounts[7],
+        pool_quote_token_account: accounts[8],
+        protocol_fee_recipient: accounts[9],
+        protocol_fee_recipient_token_account: accounts[10],
+        base_token_program: accounts.get(11).copied().unwrap_or_default(),
+        quote_token_program: accounts.get(12).copied().unwrap_or_default(),
         coin_creator_vault_ata: accounts.get(17).copied().unwrap_or_default(),
         coin_creator_vault_authority: accounts.get(18).copied().unwrap_or_default(),
         ..Default::default()
