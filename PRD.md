@@ -1,9 +1,10 @@
 # Product Requirements Document (PRD)
 ## Solana Token Launch Bundler
 
-**Version:** 1.0
+**Version:** 1.1
 **Date:** 2025-11-18
-**Status:** Draft
+**Status:** Updated after Competitive Analysis
+**Changelog:** Added LUT support, bundle simulation, regional Jito endpoints (see COMPETITIVE_ANALYSIS.md)
 
 ---
 
@@ -417,16 +418,24 @@ Runtime: Node.js 18+ / Bun
 Language: TypeScript 5+
 Framework: Commander.js (CLI)
 
-Dependencies:
-- @solana/web3.js
-- @solana/spl-token
-- @coral-xyz/anchor (для Pumpfun program)
-- jito-ts SDK
-- bs58, tweetnacl (криптография)
-- inquirer (интерактивный CLI)
-- chalk, ora (UI для CLI)
-- dotenv (конфигурация)
-- winston (логирование)
+Core Dependencies:
+- @solana/web3.js ^1.87.6
+- @solana/spl-token ^0.3.9
+- @coral-xyz/anchor ^0.29.0 (для Pumpfun program с IDL)
+- jito-js ^3.0.0 (Official Jito SDK - CRITICAL) ⭐ NEW
+- bs58 ^5.0.0, tweetnacl ^1.0.3 (криптография)
+- inquirer ^9.2.12 (интерактивный CLI)
+- chalk ^5.3.0, ora ^7.0.1 (UI для CLI)
+- dotenv ^16.3.1 (конфигурация)
+- winston ^3.11.0 (логирование)
+- axios ^1.6.0 (для Jito API calls) ⭐ NEW
+- crypto-js ^4.2.0 (AES-256 encryption)
+
+Key Features Added:
+✅ LUT (Lookup Tables) support - снижает overhead на 80%
+✅ Bundle simulation перед отправкой
+✅ Regional Jito endpoints с auto-selection
+✅ Pumpfun IDL integration для typed instructions
 ```
 
 #### Phase 2: Web Application (Future)
@@ -447,17 +456,20 @@ solana-token-launcher/
 │   │   ├── wallet/
 │   │   │   ├── manager.ts          # WalletManager class
 │   │   │   ├── encryption.ts       # AES-256 encryption
-│   │   │   └── storage.ts          # Secure file storage
+│   │   │   ├── storage.ts          # Secure file storage
+│   │   │   └── lut-manager.ts      # ⭐ NEW: LUT creation & management
 │   │   ├── token/
 │   │   │   ├── launcher.ts         # Token creation & bundling
 │   │   │   ├── seller.ts           # Token selling logic
 │   │   │   └── metadata.ts         # Token metadata handling
 │   │   ├── jito/
-│   │   │   ├── bundle.ts           # Jito bundle builder
-│   │   │   ├── client.ts           # Jito Block Engine client
-│   │   │   └── monitor.ts          # Bundle monitoring
+│   │   │   ├── bundle.ts           # Jito bundle builder (with LUT)
+│   │   │   ├── client.ts           # Jito Block Engine client (jito-js SDK)
+│   │   │   ├── monitor.ts          # Bundle monitoring
+│   │   │   ├── simulator.ts        # ⭐ NEW: Bundle simulation
+│   │   │   └── endpoints.ts        # ⭐ NEW: Regional endpoint selection
 │   │   ├── pumpfun/
-│   │   │   ├── program.ts          # Pumpfun program instructions
+│   │   │   ├── program.ts          # Pumpfun program instructions (Anchor + IDL)
 │   │   │   ├── swap.ts             # Buy/Sell через Pumpfun
 │   │   │   └── types.ts            # Типы и интерфейсы
 │   │   └── volume/
@@ -487,9 +499,15 @@ solana-token-launcher/
 │       └── index.ts                # Shared TypeScript types
 ├── config/
 │   ├── default.json                # Default config file
-│   └── launch-template.json        # Template for launch configs
+│   ├── launch-template.json        # Template for launch configs
+│   ├── jito-endpoints.json         # ⭐ NEW: Regional Jito endpoints
+│   └── lut-config.json             # ⭐ NEW: LUT configuration
+├── idl/
+│   └── pumpfun.json                # ⭐ NEW: Pumpfun program IDL
 ├── wallets/                        # Encrypted wallet storage (gitignored)
 ├── logs/                           # Application logs (gitignored)
+│   ├── app.log                     # General logs
+│   └── launches.csv                # ⭐ NEW: Launch analytics
 ├── tests/
 │   ├── unit/
 │   ├── integration/
