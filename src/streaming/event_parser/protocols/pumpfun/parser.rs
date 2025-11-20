@@ -40,6 +40,16 @@ pub const CONFIGS: &[GenericEventParseConfig] = &[
         program_id: PUMPFUN_PROGRAM_ID,
         protocol_type: ProtocolType::PumpFun,
         inner_instruction_discriminator: discriminators::TRADE_EVENT,
+        instruction_discriminator: discriminators::BUY_EXACT_SOL_IN_IX,
+        event_type: EventType::PumpFunBuy,
+        inner_instruction_parser: Some(parse_trade_inner_instruction),
+        instruction_parser: Some(parse_buy_exact_sol_in_instruction),
+        requires_inner_instruction: false,
+    },
+    GenericEventParseConfig {
+        program_id: PUMPFUN_PROGRAM_ID,
+        protocol_type: ProtocolType::PumpFun,
+        inner_instruction_discriminator: discriminators::TRADE_EVENT,
         instruction_discriminator: discriminators::SELL_IX,
         event_type: EventType::PumpFunSell,
         inner_instruction_parser: Some(parse_trade_inner_instruction),
@@ -185,6 +195,40 @@ fn parse_buy_instruction(
         user_volume_accumulator: accounts[13],
         max_sol_cost,
         amount,
+        is_buy: true,
+        ..Default::default()
+    }))
+}
+
+// 解析buy_exact_sol_in指令事件
+fn parse_buy_exact_sol_in_instruction(
+    data: &[u8],
+    accounts: &[Pubkey],
+    metadata: EventMetadata,
+) -> Option<Box<dyn UnifiedEvent>> {
+    if data.len() < 16 || accounts.len() < 13 {
+        return None;
+    }
+    let spendable_sol_in = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    let min_tokens_out = u64::from_le_bytes(data[8..16].try_into().unwrap());
+    Some(Box::new(PumpFunTradeEvent {
+        metadata,
+        global: accounts[0],
+        fee_recipient: accounts[1],
+        mint: accounts[2],
+        bonding_curve: accounts[3],
+        associated_bonding_curve: accounts[4],
+        associated_user: accounts[5],
+        user: accounts[6],
+        system_program: accounts[7],
+        token_program: accounts[8],
+        creator_vault: accounts[9],
+        event_authority: accounts[10],
+        program: accounts[11],
+        global_volume_accumulator: *accounts.get(12).unwrap_or(&Pubkey::default()),
+        user_volume_accumulator: *accounts.get(13).unwrap_or(&Pubkey::default()),
+        max_sol_cost: spendable_sol_in,
+        amount: min_tokens_out,
         is_buy: true,
         ..Default::default()
     }))

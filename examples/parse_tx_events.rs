@@ -9,7 +9,7 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<()> {
     let signatures = vec![
-        "5sDWrTTkE69CNc6nrAX7SqPS7FiajJTg8TMog3Gve7KjVfrqYn8YZcX1kAoyKok976S4RTnK1EdCV8hRiDWg68Aj",
+        "3WQqYTWtvC2E4ooddNjyqsov9k3yhKxsPMBj3bKZgDzBJokFKPrue7hgi459DUT4uBjtRn4JU2KZPUzY4QZ5ZPVH",
     ];
     // Validate signature format
     let mut valid_signatures = Vec::new();
