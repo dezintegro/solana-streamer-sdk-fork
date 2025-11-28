@@ -73,5 +73,9 @@ spl-token-2022 = "9.0.0"
 solana-commitment-config = { version = "3.0.0", features = ["serde"] }
 tonic-prost = "0.14.2"
 
+[[example]]
+name = "arpc_example"
+path = "examples/arpc_example.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
