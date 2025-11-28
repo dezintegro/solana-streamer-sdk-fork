@@ -1,5 +1,5 @@
 use solana_streamer_sdk::streaming::ArpcGrpc;
-use solana_streamer_sdk::streaming::event_parser::{Protocol, UnifiedEvent};
+use solana_streamer_sdk::streaming::event_parser::Protocol;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -44,16 +44,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             move |event| {
                 let count = counter_clone.fetch_add(1, Ordering::Relaxed) + 1;
 
-                log::info!("Received event #{}: {:?}", count, event.event_type());
+                log::info!("Received event #{}: {}", count, event.event_type());
+                log::info!("  Signature: {}", event.signature());
+                log::info!("  Slot: {:?}", event.slot());
 
-                // Print event details
+                // Print event details based on type
+                use solana_streamer_sdk::streaming::event_parser::common::types::EventType;
                 match event.event_type() {
-                    solana_streamer_sdk::streaming::event_parser::common::types::EventType::PumpFun => {
-                        log::info!("  Signature: {}", event.signature());
-                        log::info!("  Slot: {:?}", event.slot());
+                    EventType::PumpFunCreateToken => {
+                        log::info!("  Type: PumpFun Token Creation");
+                    }
+                    EventType::PumpFunBuy => {
+                        log::info!("  Type: PumpFun Buy");
+                    }
+                    EventType::PumpFunSell => {
+                        log::info!("  Type: PumpFun Sell");
+                    }
+                    EventType::PumpFunMigrate => {
+                        log::info!("  Type: PumpFun Migration");
                     }
                     _ => {
-                        log::info!("  Event: {:?}", event);
+                        log::info!("  Type: Other event");
                     }
                 }
             },
