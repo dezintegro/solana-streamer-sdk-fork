@@ -55,7 +55,7 @@ The ARPC implementation follows a three-layer architecture:
 ┌──────────────────────────────────────────────────────────┐
 │ LAYER 1: Protocol Layer (ARPC-specific)                 │
 ├──────────────────────────────────────────────────────────┤
-│  • proto/arpc.proto         - Protocol definition        │
+│  • src/protos/arpc.proto    - Protocol definition        │
 │  • src/protos/arpc.rs       - Generated code             │
 │  • arpc/connection.rs       - Client implementation      │
 │  • arpc_stream.rs           - Stream + conversion        │

@@ -289,8 +289,8 @@ loop {
 ## Files in This Implementation
 
 ### Core Files
-- `proto/arpc.proto` - Protocol definition
-- `src/protos/arpc.rs` - Generated protobuf code
+- `src/protos/arpc.proto` - Protocol definition (for reference)
+- `src/protos/arpc.rs` - Manually written protobuf code
 - `src/streaming/arpc/connection.rs` - Client implementation
 - `src/streaming/arpc_stream.rs` - Subscription logic + conversion
 - `src/streaming/arpc/types.rs` - Type re-exports
