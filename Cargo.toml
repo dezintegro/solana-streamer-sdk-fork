@@ -77,5 +77,9 @@ tonic-prost = "0.14.2"
 name = "arpc_example"
 path = "examples/arpc_example.rs"
 
+[[example]]
+name = "arpc_dynamic_subscription"
+path = "examples/arpc_dynamic_subscription.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

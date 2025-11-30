@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ARPC endpoint - replace with actual endpoint
     let endpoint = std::env::var("ARPC_ENDPOINT")
-        .unwrap_or_else(|_| "http://localhost:10000".to_string());
+        .unwrap_or_else(|_| "http://localhost:20202".to_string());
 
     log::info!("Connecting to ARPC endpoint: {}", endpoint);
 
@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Account filters - replace with actual accounts you want to monitor
     let account_include = vec![
         // Example: Pump.fun program ID
-        "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P".to_string(),
+        "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA".to_string(),
     ];
 
     log::info!("Starting ARPC subscription with filters:");
@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Subscribe to transactions
     client
         .arpc_subscribe(
-            vec![Protocol::PumpFun], // Monitor Pump.fun protocol
+            vec![Protocol::PumpSwap], // Monitor Pump.fun protocol
             None,                     // No bot wallet filter
             None,                     // No event type filter
             account_include,          // Include transactions with these accounts
@@ -47,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 log::info!("Received event #{}: {}", count, event.event_type());
                 log::info!("  Signature: {}", event.signature());
                 log::info!("  Slot: {:?}", event.slot());
+                log::info!("  Event: {:?}", event);
 
                 // Print event details based on type
                 use solana_streamer_sdk::streaming::event_parser::common::types::EventType;

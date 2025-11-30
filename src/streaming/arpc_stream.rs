@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
-use futures::StreamExt;
+use futures::{StreamExt, SinkExt};
+use futures::channel::mpsc;
 use solana_sdk::{
     hash::Hash,
     message::{
@@ -13,6 +15,7 @@ use solana_sdk::{
     signature::Signature,
     transaction::VersionedTransaction,
 };
+use anyhow::anyhow;
 
 use crate::common::AnyResult;
 use crate::protos::arpc::{SubscribeRequest, SubscribeRequestFilterTransactions, SubscribeResponseTransaction};
@@ -21,12 +24,13 @@ use crate::streaming::event_parser::common::filter::EventTypeFilter;
 use crate::streaming::event_parser::common::high_performance_clock::get_high_perf_clock;
 use crate::streaming::event_parser::{Protocol, UnifiedEvent};
 use crate::streaming::shred::pool::factory;
-use log::error;
+use log::{error, info};
+use std::time::Instant;
 
 use super::ArpcGrpc;
 
 impl ArpcGrpc {
-    /// Subscribe to ARPC transaction stream
+    /// Subscribe to ARPC transaction stream with support for dynamic updates
     pub async fn arpc_subscribe<F>(
         &self,
         protocols: Vec<Protocol>,
@@ -40,8 +44,14 @@ impl ArpcGrpc {
     where
         F: Fn(Box<dyn UnifiedEvent>) + Send + Sync + 'static,
     {
-        // Stop any existing subscription
-        self.stop().await;
+        // Check if already subscribed
+        if self
+            .active_subscription
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            return Err(anyhow!("Already subscribed. Use update_subscription() to modify filters"));
+        }
 
         let mut metrics_handle = None;
         // Start automatic performance monitoring (if enabled)
@@ -75,47 +85,75 @@ impl ArpcGrpc {
             ping_id: None, // We'll implement ping later if needed
         };
 
+        // Save current request for updates
+        *self.current_request.write().await = Some(request.clone());
+
+        // Create control channel for subscription updates
+        let (control_tx, mut control_rx) = mpsc::channel::<SubscribeRequest>(100);
+        *self.control_tx.lock().await = Some(control_tx);
+
+        // Create channel for sending requests to gRPC stream
+        let (mut subscribe_tx, subscribe_rx) = mpsc::channel::<SubscribeRequest>(100);
+
+        // Send initial request
+        subscribe_tx.send(request).await
+            .map_err(|e| anyhow!("Failed to send initial request: {}", e))?;
+
         // Start streaming
         let mut client = (*self.arpc_client).clone();
-        let stream_request = futures::stream::once(async { request });
-        let mut stream = client.subscribe(stream_request).await?.into_inner();
+        let mut stream = client.subscribe(subscribe_rx).await?.into_inner();
 
         let event_processor_clone = event_processor.clone();
         let stream_task = tokio::spawn(async move {
-            while let Some(message) = stream.next().await {
-                match message {
-                    Ok(response) => {
-                        // Process transaction if present
-                        if let Some(tx) = response.transaction {
-                            match convert_arpc_to_versioned_transaction(&tx) {
-                                Ok(versioned_tx) => {
-                                    let transaction_with_slot =
-                                        factory::create_transaction_with_slot_pooled(
-                                            versioned_tx,
-                                            tx.slot,
-                                            get_high_perf_clock(),
-                                        );
+            loop {
+                tokio::select! {
+                    message = stream.next() => {
+                        match message {
+                            Some(Ok(response)) => {
+                                // Process transaction if present
+                                if let Some(tx) = response.transaction {
+                                    match convert_arpc_to_versioned_transaction(&tx) {
+                                        Ok(versioned_tx) => {
+                                            let transaction_with_slot =
+                                                factory::create_transaction_with_slot_pooled(
+                                                    versioned_tx,
+                                                    tx.slot,
+                                                    get_high_perf_clock(),
+                                                );
 
-                                    // Process transaction with backpressure control in EventProcessor
-                                    if let Err(e) = event_processor_clone
-                                        .process_shred_transaction_with_metrics(
-                                            transaction_with_slot,
-                                            bot_wallet,
-                                        )
-                                        .await
-                                    {
-                                        error!("Error processing transaction: {e:?}");
+                                            // Process transaction with backpressure control in EventProcessor
+                                            if let Err(e) = event_processor_clone
+                                                .process_shred_transaction_with_metrics(
+                                                    transaction_with_slot,
+                                                    bot_wallet,
+                                                )
+                                                .await
+                                            {
+                                                error!("Error processing transaction: {e:?}");
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!(
+                                                "Error converting ARPC transaction: {e:?}"
+                                            );
+                                        }
                                     }
                                 }
-                                Err(e) => {
-                                    error!("Error converting ARPC transaction: {e:?}");
-                                }
                             }
+                            Some(Err(error)) => {
+                                error!("Stream error: {error:?}");
+                                break;
+                            }
+                            None => break,
                         }
                     }
-                    Err(error) => {
-                        error!("Stream error: {error:?}");
-                        break;
+                    Some(update) = control_rx.next() => {
+                        // Received subscription update, send new request to stream
+                        if let Err(e) = subscribe_tx.send(update).await {
+                            error!("Failed to send subscription update: {}", e);
+                            break;
+                        }
+                        info!("Subscription updated successfully");
                     }
                 }
             }
