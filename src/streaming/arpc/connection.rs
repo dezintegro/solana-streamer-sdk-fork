@@ -9,10 +9,11 @@ use futures::SinkExt;
 use anyhow::anyhow;
 
 use crate::common::AnyResult;
-use crate::protos::arpc::{arpc_service_client::ArpcServiceClient, SubscribeRequest, SubscribeRequestFilterTransactions};
+use crate::protos::arpc::{arpc_service_client::ArpcServiceClient, SubscribeRequest};
 use crate::streaming::common::{
     MetricsManager, PerformanceMetrics, StreamClientConfig, SubscriptionHandle,
 };
+use crate::streaming::arpc::types::{TransactionFilter, TransactionsFilterMap};
 
 /// ARPC gRPC client for streaming transactions
 #[derive(Clone)]
@@ -108,20 +109,52 @@ impl ArpcGrpc {
         self.active_subscription.store(false, Ordering::Release);
     }
 
-    /// Update subscription filters at runtime without reconnection
+    /// Generate subscription filters from transaction filters
+    ///
+    /// Creates a HashMap with unique keys for each filter, similar to Yellowstone gRPC implementation
     ///
     /// # Parameters
-    /// * `account_include` - Accounts to include in the filter
-    /// * `account_exclude` - Accounts to exclude from the filter
-    /// * `account_required` - Accounts that are required in transactions
+    /// * `transaction_filters` - Vector of transaction filters to convert
+    ///
+    /// # Returns
+    /// HashMap with unique keys (format: "client_{index}") for each filter
+    pub fn generate_filters(&self, transaction_filters: Vec<TransactionFilter>) -> TransactionsFilterMap {
+        let mut filters = HashMap::new();
+        for (index, filter) in transaction_filters.into_iter().enumerate() {
+            filters.insert(
+                format!("client_{}", index),
+                filter.into(),
+            );
+        }
+        filters
+    }
+
+    /// Update subscription filters at runtime without reconnection
+    ///
+    /// Supports multiple transaction filters with unique keys, similar to Yellowstone gRPC.
+    /// Each filter will be assigned a unique key in the format "client_{index}".
+    ///
+    /// # Parameters
+    /// * `transaction_filters` - Vector of transaction filters to apply
     ///
     /// # Returns
     /// Returns `AnyResult<()>` on success, error on failure
+    ///
+    /// # Example
+    /// ```no_run
+    /// use solana_streamer_sdk::streaming::arpc::TransactionFilter;
+    ///
+    /// let transaction_filter = TransactionFilter {
+    ///     account_include: vec!["account1".to_string()],
+    ///     account_exclude: vec![],
+    ///     account_required: vec![],
+    /// };
+    ///
+    /// client.update_subscription(vec![transaction_filter]).await?;
+    /// ```
     pub async fn update_subscription(
         &self,
-        account_include: Vec<String>,
-        account_exclude: Vec<String>,
-        account_required: Vec<String>,
+        transaction_filters: Vec<TransactionFilter>,
     ) -> AnyResult<()> {
         // Get control sender (clone to avoid holding lock during await)
         let mut control_sender = {
@@ -146,15 +179,8 @@ impl ArpcGrpc {
             .ok_or_else(|| anyhow!("No active subscription"))?
             .clone();
 
-        // Update transaction filters
-        let filter = SubscribeRequestFilterTransactions {
-            account_include,
-            account_exclude,
-            account_required,
-        };
-
-        let mut filters = HashMap::new();
-        filters.insert("transactions".to_string(), filter);
+        // Generate filters with unique keys
+        let filters = self.generate_filters(transaction_filters);
 
         request.transactions = filters;
 

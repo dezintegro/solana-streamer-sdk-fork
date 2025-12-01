@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -18,27 +17,55 @@ use solana_sdk::{
 use anyhow::anyhow;
 
 use crate::common::AnyResult;
-use crate::protos::arpc::{SubscribeRequest, SubscribeRequestFilterTransactions, SubscribeResponseTransaction};
+use crate::protos::arpc::{SubscribeRequest, SubscribeResponseTransaction};
 use crate::streaming::common::{EventProcessor, SubscriptionHandle};
 use crate::streaming::event_parser::common::filter::EventTypeFilter;
 use crate::streaming::event_parser::common::high_performance_clock::get_high_perf_clock;
 use crate::streaming::event_parser::{Protocol, UnifiedEvent};
 use crate::streaming::shred::pool::factory;
+use crate::streaming::arpc::types::TransactionFilter;
 use log::{error, info};
-use std::time::Instant;
 
 use super::ArpcGrpc;
 
 impl ArpcGrpc {
     /// Subscribe to ARPC transaction stream with support for dynamic updates
+    ///
+    /// Supports multiple transaction filters with unique keys, similar to Yellowstone gRPC.
+    /// Each filter will be assigned a unique key in the format "client_{index}".
+    ///
+    /// # Parameters
+    /// * `protocols` - List of protocols to parse events from
+    /// * `bot_wallet` - Optional bot wallet for filtering
+    /// * `event_type_filter` - Optional event type filter
+    /// * `transaction_filters` - Vector of transaction filters to apply
+    /// * `callback` - Callback function to handle events
+    ///
+    /// # Example
+    /// ```no_run
+    /// use solana_streamer_sdk::streaming::arpc::TransactionFilter;
+    /// use solana_streamer_sdk::streaming::event_parser::Protocol;
+    ///
+    /// let transaction_filter = TransactionFilter {
+    ///     account_include: vec!["account1".to_string()],
+    ///     account_exclude: vec![],
+    ///     account_required: vec![],
+    /// };
+    ///
+    /// client.arpc_subscribe(
+    ///     vec![Protocol::PumpSwap],
+    ///     None,
+    ///     None,
+    ///     vec![transaction_filter],
+    ///     |event| { println!("Event: {:?}", event); }
+    /// ).await?;
+    /// ```
     pub async fn arpc_subscribe<F>(
         &self,
         protocols: Vec<Protocol>,
         bot_wallet: Option<Pubkey>,
         event_type_filter: Option<EventTypeFilter>,
-        account_include: Vec<String>,
-        account_exclude: Vec<String>,
-        account_required: Vec<String>,
+        transaction_filters: Vec<TransactionFilter>,
         callback: F,
     ) -> AnyResult<()>
     where
@@ -70,15 +97,8 @@ impl ArpcGrpc {
             Some(Arc::new(callback)),
         );
 
-        // Prepare subscription request
-        let filter = SubscribeRequestFilterTransactions {
-            account_include,
-            account_exclude,
-            account_required,
-        };
-
-        let mut filters = HashMap::new();
-        filters.insert("transactions".to_string(), filter);
+        // Generate filters with unique keys
+        let filters = self.generate_filters(transaction_filters);
 
         let request = SubscribeRequest {
             transactions: filters,

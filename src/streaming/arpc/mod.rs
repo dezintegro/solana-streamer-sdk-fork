@@ -3,4 +3,4 @@ pub mod pool;
 pub mod types;
 
 pub use connection::ArpcGrpc;
-pub use types::TransactionWithSlot;
+pub use types::{TransactionFilter, TransactionWithSlot, TransactionsFilterMap};

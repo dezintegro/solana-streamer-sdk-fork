@@ -1,4 +1,5 @@
 use solana_streamer_sdk::streaming::ArpcGrpc;
+use solana_streamer_sdk::streaming::arpc::TransactionFilter;
 use solana_streamer_sdk::streaming::event_parser::Protocol;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -25,12 +26,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Account filters - replace with actual accounts you want to monitor
     let account_include = vec![
-        // Example: Pump.fun program ID
+        // Example: PumpSwap program ID
         "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA".to_string(),
     ];
 
     log::info!("Starting ARPC subscription with filters:");
     log::info!("  Account include: {:?}", account_include);
+
+    // Create transaction filter (similar to grpc_example.rs)
+    let transaction_filter = TransactionFilter {
+        account_include: account_include.clone(),
+        account_exclude: vec![],
+        account_required: vec![],
+    };
 
     // Subscribe to transactions
     client
@@ -38,9 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             vec![Protocol::PumpSwap], // Monitor Pump.fun protocol
             None,                     // No bot wallet filter
             None,                     // No event type filter
-            account_include,          // Include transactions with these accounts
-            vec![],                   // No account exclude
-            vec![],                   // No account required
+            vec![transaction_filter], // Transaction filters
             move |event| {
                 let count = counter_clone.fetch_add(1, Ordering::Relaxed) + 1;
 

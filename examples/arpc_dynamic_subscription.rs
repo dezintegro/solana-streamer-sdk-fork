@@ -1,5 +1,6 @@
 use anyhow::Result;
 use solana_streamer_sdk::streaming::ArpcGrpc;
+use solana_streamer_sdk::streaming::arpc::TransactionFilter;
 use solana_streamer_sdk::streaming::event_parser::Protocol;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -65,14 +66,20 @@ async fn main() -> Result<()> {
             EventType::RaydiumCpmmSwapBaseOutput,
         ],
     };
+
+    // Create transaction filter for PumpSwap
+    let transaction_filter = TransactionFilter {
+        account_include: vec![PUMPSWAP_PROGRAM_ID.to_string()],
+        account_exclude: vec![],
+        account_required: vec![],
+    };
+
     client
         .arpc_subscribe(
             vec![Protocol::PumpSwap, Protocol::RaydiumCpmm],
             None,
             Some(trade_event_filter),
-            vec![PUMPSWAP_PROGRAM_ID.to_string()],
-            vec![],
-            vec![],
+            vec![transaction_filter],
             callback,
         )
         .await?;
@@ -104,12 +111,15 @@ async fn main() -> Result<()> {
     // === Phase 2: Update to RaydiumCpmm ===
     println!("Phase 2: Updating subscription to RaydiumCpmm program ({})...", RAYDIUM_CPMM_PROGRAM_ID);
 
+    // Create transaction filter for RaydiumCpmm
+    let transaction_filter = TransactionFilter {
+        account_include: vec![RAYDIUM_CPMM_PROGRAM_ID.to_string()],
+        account_exclude: vec![],
+        account_required: vec![],
+    };
+
     client
-        .update_subscription(
-            vec![RAYDIUM_CPMM_PROGRAM_ID.to_string()],
-            vec![],
-            vec![],
-        )
+        .update_subscription(vec![transaction_filter])
         .await?;
 
     println!("✓ Subscription updated to RaydiumCpmm transactions");
